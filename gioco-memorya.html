@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Il nostro memory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#e9eff6; --ink:#1f2a44; --muted:#52607f; --card:#ffffff; --pic:#f3dde5;
+  --accent:#c93a62; --on-accent:#ffffff; --note:#ffffff; --line:#c5d1e3;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#141a2b; --ink:#edf1fa; --muted:#a4afcb; --card:#232c47; --pic:#3a3050;
+    --accent:#ef6f90; --on-accent:#1a1020; --note:#1c2440; --line:#33406a;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  line-height:1.5;
+  padding:max(20px,env(safe-area-inset-top)) 16px max(28px,env(safe-area-inset-bottom));
+}
+main{max-width:600px;margin:0 auto}
+header{text-align:center;margin-bottom:18px}
+h1{font-size:clamp(1.6rem,6vw,2.2rem);line-height:1.15;margin:0 0 6px;font-weight:700}
+.sub{margin:0;color:var(--muted)}
+.stats{display:flex;justify-content:center;gap:20px;margin:0 0 16px;color:var(--muted);font-size:.95rem}
+.stats b{color:var(--ink)}
+.sfida{max-width:420px;margin:0 auto 14px;background:var(--note);border-left:4px solid var(--accent);border-radius:6px;padding:10px 12px;font-size:.95rem}
+.sfida:empty{display:none}
+@media (min-width:560px){.sfida{max-width:560px}}
+
+.board{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:420px;margin:0 auto}
+@media (min-width:560px){.board{grid-template-columns:repeat(4,1fr);max-width:560px;gap:14px}}
+
+.card{all:unset;box-sizing:border-box;display:block;aspect-ratio:3/4;perspective:700px;cursor:pointer;border-radius:8px}
+.card:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.inner{display:block;position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .45s}
+.card.open .inner,.card.done .inner{transform:rotateY(180deg)}
+.face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:8px;overflow:hidden}
+.back{background:var(--accent);display:grid;place-items:center;color:var(--on-accent);font-size:2rem;opacity:.95}
+.front{
+  transform:rotateY(180deg);background:var(--card);
+  display:grid;grid-template-rows:1fr auto;gap:6px;padding:7px 7px 4px;
+  box-shadow:0 0 0 1px var(--line);
+}
+.pic{background:var(--pic);border-radius:4px;display:grid;place-items:center;font-size:clamp(2rem,9vw,3rem);overflow:hidden}
+.pic img{width:100%;height:100%;object-fit:cover;display:block}
+.cap{font-family:"Caveat","Bradley Hand",cursive;font-weight:600;font-size:1.15rem;text-align:center;line-height:1.1;padding-bottom:2px}
+.card.done .front{box-shadow:0 0 0 2px var(--accent)}
+
+.notes-wrap{margin-top:26px}
+.notes-wrap h2{font-size:1.05rem;margin:0 0 10px}
+.notes{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.notes li{display:flex;gap:12px;align-items:center;background:var(--note);border-left:4px solid var(--accent);border-radius:6px;padding:10px 12px}
+.notes .sym{font-size:1.6rem;line-height:1}
+
+.finale{margin-top:24px;text-align:center;background:var(--note);border:2px solid var(--accent);border-radius:10px;padding:22px 18px}
+.finale h2{margin:0 0 8px;font-size:1.3rem}
+.finale p{margin:0 0 16px}
+button.again{font:inherit;font-weight:600;background:var(--accent);color:var(--on-accent);border:0;border-radius:8px;padding:10px 20px;cursor:pointer}
+button.again:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+[hidden]{display:none!important}
+
+@media (prefers-reduced-motion:reduce){.inner{transition:none}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="titolo"></h1>
+    <p class="sub">Trova le coppie: ognuna nasconde un nostro ricordo.</p>
+  </header>
+
+  <p class="sfida" id="sfida"></p>
+
+  <p class="stats">
+    <span>Mosse: <b id="mosse">0</b></span>
+    <span>Tempo: <b id="tempo">0:00</b></span>
+    <span>Coppie: <b id="trovate">0</b>/<span id="totale"></span></span>
+  </p>
+
+  <div class="board" id="board"></div>
+
+  <section class="notes-wrap" id="noteWrap" hidden>
+    <h2>Ricordi sbloccati</h2>
+    <ul class="notes" id="note" aria-live="polite"></ul>
+  </section>
+
+  <section class="finale" id="finale" role="status" hidden>
+    <h2 id="finaleTitolo"></h2>
+    <p id="finaleTesto"></p>
+    <p id="finaleEsito"><strong></strong></p>
+    <p id="finalePosta"></p>
+    <button class="again" id="rigioca" type="button">Gioca ancora</button>
+  </section>
+</main>
+
+<script>
+/* ============ PERSONALIZZA QUI ============ */
+const NOME = "Piccola"; // il suo nome
+
+// Ogni elemento è una coppia di carte.
+// simbolo: emoji mostrata sulla carta
+// foto: (facoltativo) indirizzo di una vostra foto; se la metti, sostituisce l’emoji
+// etichetta: breve scritta sotto la carta
+// testo: il ricordo che si sblocca quando trova la coppia
+const COPPIE = [
+  { simbolo: "☀️", foto: "", etichetta: "Sole",              testo: "io sono il tuo sole." },
+  { simbolo: "🌙", foto: "", etichetta: "Luna",              testo: "tu sei la mia luna." },
+  { simbolo: "🌯", foto: "", etichetta: "Piadina",           testo: "Sei più buona di una piadina." },
+  { simbolo: "🤗", foto: "", etichetta: "L’abbraccio",       testo: "Ti stringo come un koala." },
+  { simbolo: "💋", foto: "", etichetta: "Un bacio",          testo: "Mi mancano i tuoi baci." },
+  { simbolo: "💙", foto: "", etichetta: "Amore",             testo: "Ti amo piccola." }
+];
+
+// La sfida: il tuo record da battere. Vince chi fa meno mosse;
+// a parità di mosse vince chi è più veloce.
+const SFIDA = {
+  nome: "Io",
+  mosse: 12,
+  secondi: 75,
+  posta: "Chi perde deve una vita insieme all' altro ."   // lasciala vuota ("") se non vuoi una posta
+};
+
+// I messaggi finali, a seconda che lei batta o no il tuo record.
+const FINALE = {
+  vittoria:  { titolo: "Mi hai battuto!",         testo: "" },
+  sconfitta: { titolo: "Questa volta vinco io!",  testo: "" }
+};
+/* ========================================== */
+
+const board = document.getElementById("board");
+const elMosse = document.getElementById("mosse");
+const elTrovate = document.getElementById("trovate");
+const elNote = document.getElementById("note");
+const elNoteWrap = document.getElementById("noteWrap");
+const elFinale = document.getElementById("finale");
+
+document.title = "Memory per " + NOME;
+document.getElementById("titolo").textContent = "Memory per " + NOME;
+document.getElementById("totale").textContent = COPPIE.length;
+const elTempo = document.getElementById("tempo");
+const elSfida = document.getElementById("sfida");
+
+let primo = null, bloccato = false, mosse = 0, trovate = 0;
+let inizio = 0, timer = null;
+
+const CHIAVE = "memory-record:" + NOME;
+
+function fmt(s){
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+function leggiRecord(){
+  try { return JSON.parse(localStorage.getItem(CHIAVE)); } catch (e) { return null; }
+}
+function salvaRecord(r){
+  try { localStorage.setItem(CHIAVE, JSON.stringify(r)); } catch (e) {}
+}
+// vero se il risultato a è migliore di b
+function meglio(a, b){
+  return a.mosse < b.mosse || (a.mosse === b.mosse && a.secondi < b.secondi);
+}
+
+function avviaTimer(){
+  inizio = Date.now();
+  timer = setInterval(() => {
+    elTempo.textContent = fmt(Math.floor((Date.now() - inizio) / 1000));
+  }, 500);
+}
+function fermaTimer(){
+  clearInterval(timer);
+  timer = null;
+  inizio = 0;
+}
+
+function mostraSfida(){
+  let t = "Da battere: " + SFIDA.nome + ", " + SFIDA.mosse + " mosse in " + fmt(SFIDA.secondi) + ".";
+  if (SFIDA.posta) t += " In palio: " + SFIDA.posta;
+  const rec = leggiRecord();
+  if (rec) t += " Il tuo record: " + rec.mosse + " mosse in " + fmt(rec.secondi) + ".";
+  elSfida.textContent = t;
+}
+
+function finisci(){
+  const secondi = Math.floor((Date.now() - inizio) / 1000);
+  fermaTimer();
+  elTempo.textContent = fmt(secondi);
+
+  const mio = { mosse, secondi };
+  const vinto = meglio(mio, SFIDA);
+  const prec = leggiRecord();
+  const nuovoRecord = !prec || meglio(mio, prec);
+  if (nuovoRecord) salvaRecord(mio);
+
+  const esito = vinto ? FINALE.vittoria : FINALE.sconfitta;
+  document.getElementById("finaleTitolo").textContent = esito.titolo;
+  document.getElementById("finaleTesto").textContent = esito.testo;
+
+  let r = "Il tuo risultato: " + mosse + " mosse in " + fmt(secondi) + ".";
+  if (nuovoRecord && prec) r += " È il tuo nuovo record personale.";
+  document.getElementById("finaleEsito").textContent = r;
+  document.getElementById("finalePosta").textContent = SFIDA.posta ? "In palio: " + SFIDA.posta : "";
+
+  mostraSfida();
+  elFinale.hidden = false;
+}
+
+function mescola(a){
+  for (let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function creaCarta(c, id){
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "card";
+  b.dataset.id = id;
+  b.setAttribute("aria-label", "Carta coperta");
+
+  const pic = c.foto
+    ? '<img src="' + c.foto + '" alt="">'
+    : c.simbolo;
+
+  b.innerHTML =
+    '<span class="inner">' +
+      '<span class="face back" aria-hidden="true">💙</span>' +
+      '<span class="face front"><span class="pic">' + pic + '</span>' +
+      '<span class="cap">' + c.etichetta + '</span></span>' +
+    '</span>';
+
+  b.addEventListener("click", () => gira(b, c));
+  return b;
+}
+
+function apri(b, c){
+  b.classList.add("open");
+  b.setAttribute("aria-label", "Carta scoperta: " + c.etichetta);
+}
+function chiudi(b){
+  b.classList.remove("open");
+  b.setAttribute("aria-label", "Carta coperta");
+}
+
+function gira(b, c){
+  if (bloccato || b.classList.contains("open") || b.classList.contains("done")) return;
+  apri(b, c);
+  if (!inizio) avviaTimer();
+
+  if (!primo){ primo = { b, c }; return; }
+
+  mosse++;
+  elMosse.textContent = mosse;
+
+  if (primo.b.dataset.id === b.dataset.id){
+    primo.b.classList.replace("open", "done");
+    b.classList.replace("open", "done");
+    trovate++;
+    elTrovate.textContent = trovate;
+    aggiungiRicordo(c);
+    primo = null;
+    if (trovate === COPPIE.length) finisci();
+  } else {
+    bloccato = true;
+    const a = primo.b;
+    primo = null;
+    setTimeout(() => { chiudi(a); chiudi(b); bloccato = false; }, 900);
+  }
+}
+
+function aggiungiRicordo(c){
+  elNoteWrap.hidden = false;
+  const li = document.createElement("li");
+  const sym = document.createElement("span");
+  sym.className = "sym";
+  sym.textContent = c.simbolo;
+  sym.setAttribute("aria-hidden", "true");
+  const t = document.createElement("span");
+  t.textContent = c.testo;
+  li.append(sym, t);
+  elNote.appendChild(li);
+}
+
+function nuovaPartita(){
+  primo = null; bloccato = false; mosse = 0; trovate = 0;
+  fermaTimer();
+  elMosse.textContent = 0; elTrovate.textContent = 0; elTempo.textContent = "0:00";
+  mostraSfida();
+  elNote.innerHTML = ""; elNoteWrap.hidden = true; elFinale.hidden = true;
+  board.innerHTML = "";
+  const mazzo = [];
+  COPPIE.forEach((c, i) => { mazzo.push({ c, id: i }, { c, id: i }); });
+  mescola(mazzo).forEach(({ c, id }) => board.appendChild(creaCarta(c, id)));
+}
+
+document.getElementById("rigioca").addEventListener("click", nuovaPartita);
+nuovaPartita();
+</script>
+</body>
+</html>
