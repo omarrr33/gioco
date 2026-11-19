@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Acchiappa i cuori</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#e9eff6; --ink:#1f2a44; --muted:#52607f; --hole:#f3dde5; --hole-edge:#e2c2cf;
+  --accent:#c93a62; --on-accent:#ffffff; --note:#ffffff; --line:#c5d1e3;
+  --ok:#bfe6c9; --ko:#f5b5b5;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#141a2b; --ink:#edf1fa; --muted:#a4afcb; --hole:#3a3050; --hole-edge:#4b3f66;
+    --accent:#ef6f90; --on-accent:#1a1020; --note:#1c2440; --line:#33406a;
+    --ok:#2f5a40; --ko:#6a3040;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  line-height:1.5;
+  padding:max(20px,env(safe-area-inset-top)) 16px max(28px,env(safe-area-inset-bottom));
+}
+main{max-width:600px;margin:0 auto}
+header{text-align:center;margin-bottom:18px}
+h1{font-size:clamp(1.6rem,6vw,2.2rem);line-height:1.15;margin:0 0 6px;font-weight:700}
+.sub{margin:0;color:var(--muted)}
+.sfida{max-width:360px;margin:0 auto 14px;background:var(--note);border-left:4px solid var(--accent);border-radius:6px;padding:10px 12px;font-size:.95rem}
+.sfida:empty{display:none}
+.stats{display:flex;justify-content:center;gap:28px;margin:0 0 16px;color:var(--muted);font-size:1.05rem}
+.stats b{color:var(--ink);font-size:1.25rem;font-variant-numeric:tabular-nums}
+
+.board{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:360px;margin:0 auto;
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
+}
+.hole{
+  all:unset;box-sizing:border-box;aspect-ratio:1;border-radius:50%;cursor:pointer;
+  background:var(--hole);box-shadow:inset 0 -6px 0 var(--hole-edge);
+  display:grid;place-items:center;font-size:clamp(2rem,13vw,3.2rem);line-height:1;
+  touch-action:manipulation;transition:background-color .15s;
+}
+.hole:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.hole .t{display:block;transform:scale(0);transition:transform .12s}
+.hole.su .t{transform:scale(1)}
+.hole.ok{background:var(--ok)}
+.hole.ko{background:var(--ko)}
+.board.fermo{opacity:.55}
+
+.azioni{text-align:center;margin-top:20px}
+button.again{font:inherit;font-weight:600;background:var(--accent);color:var(--on-accent);border:0;border-radius:8px;padding:12px 28px;cursor:pointer;font-size:1.05rem}
+button.again:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+
+.finale{margin-top:24px;text-align:center;background:var(--note);border:2px solid var(--accent);border-radius:10px;padding:22px 18px}
+.finale h2{margin:0 0 8px;font-size:1.3rem}
+.finale p{margin:0 0 12px}
+.finale .esito{font-weight:600}
+.finale .posta{color:var(--muted)}
+[hidden]{display:none!important}
+
+@media (prefers-reduced-motion:reduce){.hole .t,.hole{transition:none}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="titolo"></h1>
+    <p class="sub">Tocca i cuori più veloce che puoi. Attenzione a quelli spezzati: ti tolgono punti.</p>
+  </header>
+
+  <p class="sfida" id="sfida"></p>
+
+  <p class="stats">
+    <span>Punti: <b id="punti">0</b></span>
+    <span>Tempo: <b id="tempo">0</b></span>
+  </p>
+
+  <div class="board fermo" id="board"></div>
+
+  <div class="azioni">
+    <button class="again" id="via" type="button">Via!</button>
+  </div>
+
+  <section class="finale" id="finale" role="status" hidden>
+    <h2 id="finaleTitolo"></h2>
+    <p id="finaleTesto"></p>
+    <p class="esito" id="finaleEsito"></p>
+    <p class="posta" id="finalePosta"></p>
+  </section>
+</main>
+
+<script>
+/* ============ PERSONALIZZA QUI ============ */
+const NOME = "Piccola";    // il suo nome
+const DURATA = 30;         // secondi di gioco
+const CUORE = "💙";        // il bersaglio da toccare (+1 punto)
+const SPEZZATO = "💔";     // il bersaglio da evitare (−2 punti)
+
+// La sfida: il tuo record da battere. Vince chi fa più punti;
+// a parità di punti vince il record, quindi lei deve fare di più.
+const SFIDA = {
+  nome: "Io",
+  punti: 20,
+  posta: "Chi perde bacia l'altro."   // lasciala vuota ("") se non vuoi una posta
+};
+
+// I messaggi finali, a seconda che lei batta o no il tuo record.
+const FINALE = {
+  vittoria:  { titolo: "Allors è vero mi ami di più!",        testo: "Scrivi qui il tuo messaggio per quando vince lei." },
+  sconfitta: { titolo: "lo sapevo che ti amo di più io!", testo: "" }
+};
+/* ========================================== */
+
+const board = document.getElementById("board");
+const elPunti = document.getElementById("punti");
+const elTempo = document.getElementById("tempo");
+const elSfida = document.getElementById("sfida");
+const elFinale = document.getElementById("finale");
+const btnVia = document.getElementById("via");
+
+document.title = "Acchiappa i cuori per " + NOME;
+document.getElementById("titolo").textContent = "Acchiappa i cuori, " + NOME;
+
+const CHIAVE = "cuori-record:" + NOME;
+const buchi = [];
+let punti = 0, attivo = false, inizio = 0, fine = 0, tick = null, spawn = null;
+
+function leggiRecord(){
+  try { return JSON.parse(localStorage.getItem(CHIAVE)); } catch (e) { return null; }
+}
+function salvaRecord(p){
+  try { localStorage.setItem(CHIAVE, JSON.stringify(p)); } catch (e) {}
+}
+
+function mostraSfida(){
+  let t = "Da battere: " + SFIDA.nome + ", " + SFIDA.punti + " punti in " + DURATA + " secondi.";
+  if (SFIDA.posta) t += " In palio: " + SFIDA.posta;
+  const rec = leggiRecord();
+  if (rec !== null && rec !== undefined) t += " Il tuo record: " + rec + " punti.";
+  elSfida.textContent = t;
+}
+
+function creaBuchi(){
+  for (let i = 0; i < 9; i++){
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "hole";
+    b.setAttribute("aria-label", "Buco vuoto");
+    b.innerHTML = '<span class="t" aria-hidden="true"></span>';
+    b.addEventListener("pointerdown", e => { e.preventDefault(); colpisci(b); });
+    b.addEventListener("click", e => { if (e.detail === 0) colpisci(b); }); // tastiera
+    board.appendChild(b);
+    buchi.push(b);
+  }
+}
+
+function nascondi(b){
+  clearTimeout(b._to);
+  delete b.dataset.tipo;
+  b.classList.remove("su");
+  b.setAttribute("aria-label", "Buco vuoto");
+}
+
+function lampeggia(b, classe){
+  b.classList.add(classe);
+  setTimeout(() => b.classList.remove(classe), 180);
+}
+
+function progresso(){
+  return Math.min(1, (Date.now() - inizio) / (DURATA * 1000));
+}
+
+function mostraBersaglio(){
+  const liberi = buchi.filter(b => !b.dataset.tipo);
+  if (!liberi.length) return;
+  const b = liberi[Math.floor(Math.random() * liberi.length)];
+  const spezzato = Math.random() < 0.2;
+  b.dataset.tipo = spezzato ? "spezzato" : "cuore";
+  b.querySelector(".t").textContent = spezzato ? SPEZZATO : CUORE;
+  b.setAttribute("aria-label", spezzato ? "Cuore spezzato" : "Cuore");
+  b.classList.add("su");
+  const vita = 950 - 450 * progresso();      // i bersagli restano sempre meno
+  b._to = setTimeout(() => nascondi(b), vita);
+}
+
+function programma(){
+  if (!attivo) return;
+  mostraBersaglio();
+  const pausa = 700 - 330 * progresso();     // e arrivano sempre più in fretta
+  spawn = setTimeout(programma, pausa);
+}
+
+function colpisci(b){
+  if (!attivo || !b.dataset.tipo) return;
+  const spezzato = b.dataset.tipo === "spezzato";
+  nascondi(b);
+  if (spezzato){
+    punti = Math.max(0, punti - 2);
+    lampeggia(b, "ko");
+  } else {
+    punti++;
+    lampeggia(b, "ok");
+  }
+  elPunti.textContent = punti;
+}
+
+function aggiornaTempo(){
+  const resto = Math.ceil((fine - Date.now()) / 1000);
+  elTempo.textContent = Math.max(0, resto);
+  if (resto <= 0) finisci();
+}
+
+function avvia(){
+  punti = 0;
+  elPunti.textContent = 0;
+  elFinale.hidden = true;
+  buchi.forEach(nascondi);
+  board.classList.remove("fermo");
+  btnVia.hidden = true;
+  attivo = true;
+  inizio = Date.now();
+  fine = inizio + DURATA * 1000;
+  elTempo.textContent = DURATA;
+  tick = setInterval(aggiornaTempo, 200);
+  programma();
+}
+
+function finisci(){
+  if (!attivo) return;
+  attivo = false;
+  clearInterval(tick);
+  clearTimeout(spawn);
+  buchi.forEach(nascondi);
+  board.classList.add("fermo");
+  elTempo.textContent = 0;
+
+  const vinto = punti > SFIDA.punti;
+  const prec = leggiRecord();
+  const nuovoRecord = prec === null || prec === undefined || punti > prec;
+  if (nuovoRecord) salvaRecord(punti);
+
+  const esito = vinto ? FINALE.vittoria : FINALE.sconfitta;
+  document.getElementById("finaleTitolo").textContent = esito.titolo;
+  document.getElementById("finaleTesto").textContent = esito.testo;
+
+  let r = "Hai fatto " + punti + " punti. Da battere: " + SFIDA.punti + ".";
+  if (nuovoRecord && prec !== null && prec !== undefined) r += " È il tuo nuovo record personale.";
+  document.getElementById("finaleEsito").textContent = r;
+  document.getElementById("finalePosta").textContent = SFIDA.posta ? "In palio: " + SFIDA.posta : "";
+
+  mostraSfida();
+  elFinale.hidden = false;
+  btnVia.textContent = "Gioca ancora";
+  btnVia.hidden = false;
+}
+
+btnVia.addEventListener("click", avvia);
+creaBuchi();
+mostraSfida();
+elTempo.textContent = DURATA;
+</script>
