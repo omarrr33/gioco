@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Corsa dei cuori</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#e9eff6; --ink:#1f2a44; --muted:#52607f;
+  --accent:#c93a62; --on-accent:#ffffff; --note:#ffffff; --line:#c5d1e3;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#141a2b; --ink:#edf1fa; --muted:#a4afcb;
+    --accent:#ef6f90; --on-accent:#1a1020; --note:#1c2440; --line:#33406a;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  line-height:1.5;
+  padding:max(20px,env(safe-area-inset-top)) 16px max(28px,env(safe-area-inset-bottom));
+}
+main{max-width:720px;margin:0 auto}
+header{text-align:center;margin-bottom:16px}
+h1{font-size:clamp(1.6rem,6vw,2.2rem);line-height:1.15;margin:0 0 6px;font-weight:700}
+.sub{margin:0 auto;color:var(--muted);max-width:56ch}
+.sfida{max-width:720px;margin:0 auto 14px;background:var(--note);border-left:4px solid var(--accent);border-radius:6px;padding:10px 12px;font-size:.95rem}
+.sfida:empty{display:none}
+.stats{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 26px;margin:0 0 12px;color:var(--muted);font-size:1rem}
+.stats b{color:var(--ink);font-size:1.15rem;font-variant-numeric:tabular-nums}
+.pen{color:var(--accent);font-weight:700}
+
+canvas{display:block;width:100%;height:auto;border-radius:10px;border:2px solid var(--line);background:var(--note);touch-action:none}
+
+.touch{display:none;justify-content:space-between;gap:12px;margin-top:12px}
+@media (hover:none) and (pointer:coarse){.touch{display:flex}}
+.touch .gruppo{display:flex;gap:12px}
+.tb{
+  all:unset;box-sizing:border-box;width:72px;height:72px;border-radius:50%;
+  background:var(--note);border:2px solid var(--line);display:grid;place-items:center;
+  font-size:1.7rem;font-weight:700;touch-action:none;-webkit-user-select:none;user-select:none;
+  -webkit-tap-highlight-color:transparent;cursor:pointer;
+}
+.tb.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.tb:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+
+.azioni{text-align:center;margin-top:18px}
+button.again{font:inherit;font-weight:600;background:var(--accent);color:var(--on-accent);border:0;border-radius:8px;padding:12px 28px;cursor:pointer;font-size:1.05rem}
+button.again:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+
+.finale{margin-top:22px;text-align:center;background:var(--note);border:2px solid var(--accent);border-radius:10px;padding:22px 18px}
+.finale h2{margin:0 0 8px;font-size:1.3rem}
+.finale p{margin:0 0 10px}
+.finale .esito{font-weight:600}
+.finale .dettaglio,.finale .posta{color:var(--muted)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="titolo"></h1>
+    <p class="sub" id="istruzioni"></p>
+  </header>
+
+  <p class="sfida" id="sfida"></p>
+
+  <p class="stats">
+    <span>Livello: <b id="liv">1/2</b></span>
+    <span>Cuori: <b id="cuori">0/0</b></span>
+    <span>camilla: <b id="camillaN">0/0</b></span>
+    <span>Tempo: <b id="tempo">0.0 s</b> <span class="pen" id="pen" aria-hidden="true"></span></span>
+  </p>
+
+  <canvas id="tela" width="640" height="384" role="img" aria-label="Area di gioco del platform"></canvas>
+
+  <div class="touch">
+    <div class="gruppo">
+      <button class="tb" id="bSx" type="button" aria-label="Sinistra">←</button>
+      <button class="tb" id="bDx" type="button" aria-label="Destra">→</button>
+    </div>
+    <button class="tb" id="bSalto" type="button" aria-label="Salta">↑</button>
+  </div>
+
+  <div class="azioni">
+    <button class="again" id="via" type="button">Via!</button>
+  </div>
+
+  <section class="finale" id="finale" role="status" hidden>
+    <h2 id="finaleTitolo"></h2>
+    <p id="finaleTesto"></p>
+    <p class="esito" id="finaleEsito"></p>
+    <p class="dettaglio" id="finaleDettaglio"></p>
+    <p class="posta" id="finalePosta"></p>
+  </section>
+</main>
+
+<script>
+/* ============ PERSONALIZZA QUI ============ */
+const NOME = "Arianna";        // il suo nome
+const CUORE = "💙";            // l’oggetto da raccogliere
+const PENALITA_CADUTA = 3;     // secondi aggiunti se cade o tocca una spina
+const PENALITA_CUORE = 2;      // secondi aggiunti per ogni cuore mancato
+const BONUS_camilla = 1;         // secondi tolti per ogni camilla schiacciato
+const NOME_GIOCATRICE = "Piccola";   // il nome del personaggio che gioca
+const NOME_ARRIVO = "Scemetto";      // chi aspetta all’arrivo
+
+// La sfida: il tuo tempo da battere (in secondi, penalità comprese).
+// Vince chi fa il tempo più basso. Prova tu il gioco e imposta il tuo vero tempo.
+const SFIDA = {
+  nome: "Io",
+  secondi: 60,
+  posta: ""   // lasciala vuota ("") se non vuoi una posta
+};
+
+// I messaggi finali, a seconda che lei batta o no il tuo tempo.
+const FINALE = {
+  vittoria:  { titolo: "Mi hai battuto!",        testo: "" },
+  sconfitta: { titolo: "Questa volta vinco io!", testo: "" }
+};
+/* ========================================== */
+
+const T = 32, RIGHE = 12, LARG = 640, ALT = RIGHE * T;
+const G = 0.55, SALTO = -11, VEL = 3.4, CADUTA_MAX = 12;
+
+/* ---------- Livelli ---------- */
+function costruisci(W, f){
+  const g = Array.from({ length: RIGHE }, () => Array(W).fill("."));
+  const cuori = [], nemici = [];
+  let start = { x: 2 * T + 5, y: 9 * T + 4 };
+  let arrivo = null;
+  f({
+    terra(a, b, r){ for (let x = a; x <= b; x++) for (let y = r; y < RIGHE; y++) g[y][x] = "#"; },
+    pia(a, b, r){ for (let x = a; x <= b; x++) g[r][x] = "#"; },
+    spine(a, b, r){ for (let x = a; x <= b; x++) g[r][x] = "S"; },
+    cuore(x, r){ cuori.push({ x: x * T, y: r * T, preso: false }); },
+    bandiera(x, r){ g[r][x] = "F"; },
+    via(x, r){ start = { x: x * T + 5, y: r * T + (T - 28) }; },
+    // un camilla che pattuglia le colonne a..b; r è la riga su cui cammina (come in via)
+    camilla(a, b, r){
+      nemici.push({
+        x: a * T + 3, y: r * T + (T - 26), w: 26, h: 26,
+        vx: nemici.length % 2 ? -1.1 : 1.1, min: a * T, max: (b + 1) * T, vivo: true, morto: 0
+      });
+    },
+    // la persona che aspetta all’arrivo
+    persona(x, r){ arrivo = { x: x * T + 5, y: r * T + (T - 28), w: 22, h: 28 }; }
+  });
+  return { W, g, start, cuori, nemici, arrivo };
+}
+
+const LIVELLI = [
+  () => costruisci(76, a => {
+    a.via(2, 9);
+    a.terra(0, 13, 10);
+    a.terra(17, 27, 10);
+    a.spine(22, 23, 9);
+    a.terra(28, 33, 9);
+    a.terra(34, 37, 8);
+    a.terra(41, 46, 8);
+    a.terra(47, 52, 10);
+    a.pia(54, 56, 9);
+    a.pia(59, 61, 8);
+    a.pia(64, 66, 9);
+    a.terra(69, 75, 10);
+    a.bandiera(72, 9);
+    a.camilla(24, 27, 9);
+    a.camilla(34, 37, 7);
+    a.camilla(43, 46, 7);
+    a.camilla(48, 50, 9);
+    [[6,8],[11,7],[15,7],[22,7],[31,6],[36,5],[39,6],[44,5],[50,8],[56,7],[60,6],[65,7]]
+      .forEach(([x, r]) => a.cuore(x, r));
+  }),
+  () => costruisci(76, a => {
+    a.via(2, 9);
+    a.terra(0, 9, 10);
+    a.terra(13, 20, 10);
+    a.spine(16, 17, 9);
+    a.terra(21, 24, 9);
+    a.terra(25, 28, 8);
+    a.terra(29, 32, 7);
+    a.pia(35, 37, 8);
+    a.pia(40, 42, 7);
+    a.pia(45, 47, 6);
+    a.pia(50, 52, 5);
+    a.terra(55, 60, 6);
+    a.terra(61, 75, 10);
+    a.spine(65, 66, 9);
+    a.spine(69, 69, 9);
+    a.persona(74, 9);
+    a.camilla(18, 20, 9);
+    a.camilla(26, 28, 7);
+    a.camilla(56, 60, 5);
+    [[5,8],[11,7],[16,7],[23,7],[27,6],[31,5],[36,6],[41,5],[46,4],[51,3],[58,4],[65,7],[69,7],[72,8]]
+      .forEach(([x, r]) => a.cuore(x, r));
+  })
+];
+const TOT_CUORI = LIVELLI.reduce((s, f) => s + f().cuori.length, 0);
+const TOT_camilla = LIVELLI.reduce((s, f) => s + f().nemici.length, 0);
+
+/* ---------- Elementi e stato ---------- */
+const tela = document.getElementById("tela");
+const ctx = tela.getContext("2d");
+const elLiv = document.getElementById("liv");
+const elCuori = document.getElementById("cuori");
+const elcamilla = document.getElementById("camillaN");
+const elTempo = document.getElementById("tempo");
+const elPen = document.getElementById("pen");
+const elSfida = document.getElementById("sfida");
+const elFinale = document.getElementById("finale");
+const btnVia = document.getElementById("via");
+
+document.title = "Corsa dei cuori per " + NOME;
+document.getElementById("titolo").textContent = "Corsa dei cuori, " + NOME;
+document.getElementById("istruzioni").textContent =
+  "Frecce o A e D per muoverti, su o spazio per saltare. Raccogli i cuori, evita le spine e raggiungi chi ti aspetta. " +
+  "Salta sulla testa dei camilla per schiacciarli: ogni camilla ti toglie " + BONUS_camilla + " s dal tempo. " +
+  "Ogni caduta, spina o camilla toccato di lato costa " + PENALITA_CADUTA + " secondi, ogni cuore mancato " + PENALITA_CUORE + ".";
+
+const CHIAVE = "platform-record:" + NOME;
+let stato = "pronto";          // pronto | gioco | fine
+let livello = 0, liv = null, p = null, camX = 0;
+let tempoGioco = 0, penalita = 0, presi = 0, bonus = 0, schiacciati = 0;
+let banner = 0, bannerTesto = "", penMsg = 0;
+const input = { sx: false, dx: false, salto: false };
+
+const CHIARA = { cielo1:"#dbe7f5", cielo2:"#f6e4ea", blocco:"#1f2a44", erba:"#c93a62", spine:"#52607f", player:"#f2a900", occhi:"#1f2a44", testo:"#1f2a44", pannello:"rgba(255,255,255,.88)", asta:"#1f2a44", camilla:"#4f8f3f", persona:"#2f6fdd" };
+const SCURA  = { cielo1:"#141a2b", cielo2:"#2a2340", blocco:"#0b0f1c", erba:"#ef6f90", spine:"#a4afcb", player:"#ffd166", occhi:"#141a2b", testo:"#edf1fa", pannello:"rgba(28,36,64,.88)", asta:"#edf1fa", camilla:"#7bc47f", persona:"#6ea8ff" };
+const scuro = window.matchMedia("(prefers-color-scheme: dark)");
+
+function leggiRecord(){
+  try { return JSON.parse(localStorage.getItem(CHIAVE)); } catch (e) { return null; }
+}
+function salvaRecord(v){
+  try { localStorage.setItem(CHIAVE, JSON.stringify(v)); } catch (e) {}
+}
+const sec = s => s.toFixed(1) + " s";
+
+function mostraSfida(){
+  let t = "Da battere: " + SFIDA.nome + ", " + sec(SFIDA.secondi) + ".";
+  if (SFIDA.posta) t += " In palio: " + SFIDA.posta;
+  const rec = leggiRecord();
+  if (typeof rec === "number") t += " Il tuo record: " + sec(rec) + ".";
+  elSfida.textContent = t;
+}
+
+function nuovoGiocatore(s){
+  return { x: s.x, y: s.y, w: 22, h: 28, vx: 0, vy: 0, aTerra: false, coyote: 0, buffer: 0, dir: 1 };
+}
+function carica(i){
+  livello = i;
+  liv = LIVELLI[i]();
+  p = nuovoGiocatore(liv.start);
+  camX = 0;
+  elLiv.textContent = (i + 1) + "/" + LIVELLI.length;
+}
+
+/* ---------- Fisica ---------- */
+function solido(tx, ty){
+  if (tx < 0 || tx >= liv.W) return true;
+  if (ty < 0 || ty >= RIGHE) return false;
+  return liv.g[ty][tx] === "#";
+}
+function tocca(a, b){
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function muoviX(){
+  p.x += p.vx;
+  const y0 = Math.floor(p.y / T), y1 = Math.floor((p.y + p.h - 0.01) / T);
+  if (p.vx > 0){
+    const tx = Math.floor((p.x + p.w) / T);
+    for (let ty = y0; ty <= y1; ty++) if (solido(tx, ty)){ p.x = tx * T - p.w; break; }
+  } else if (p.vx < 0){
+    const tx = Math.floor(p.x / T);
+    for (let ty = y0; ty <= y1; ty++) if (solido(tx, ty)){ p.x = (tx + 1) * T; break; }
+  }
+}
+function muoviY(){
+  p.y += p.vy;
+  p.aTerra = false;
+  const x0 = Math.floor(p.x / T), x1 = Math.floor((p.x + p.w - 0.01) / T);
+  if (p.vy > 0){
+    const ty = Math.floor((p.y + p.h) / T);
+    for (let tx = x0; tx <= x1; tx++) if (solido(tx, ty)){ p.y = ty * T - p.h; p.vy = 0; p.aTerra = true; break; }
+  } else if (p.vy < 0){
+    const ty = Math.floor(p.y / T);
+    for (let tx = x0; tx <= x1; tx++) if (solido(tx, ty)){ p.y = (ty + 1) * T; p.vy = 0; break; }
+  }
+}
+
+function muori(){
+  penalita += PENALITA_CADUTA;
+  elPen.textContent = "+" + PENALITA_CADUTA + " s";
+  penMsg = 70;
+  p = nuovoGiocatore(liv.start);
+}
+
+function aggiorna(){
+  tempoGioco += 1 / 60;
+  if (banner > 0) banner--;
+  if (penMsg > 0 && --penMsg === 0) elPen.textContent = "";
+
+  const dir = (input.dx ? 1 : 0) - (input.sx ? 1 : 0);
+  p.vx = dir * VEL;
+  if (dir) p.dir = dir;
+
+  if (p.buffer > 0) p.buffer--;
+  p.coyote = p.aTerra ? 6 : Math.max(0, p.coyote - 1);
+  if (p.buffer > 0 && p.coyote > 0){ p.vy = SALTO; p.buffer = 0; p.coyote = 0; }
+  if (!input.salto && p.vy < -4) p.vy = -4;   // salto più corto se rilasci il tasto
+
+  p.vy = Math.min(p.vy + G, CADUTA_MAX);
+  muoviX();
+  muoviY();
+
+  if (p.y > ALT + 40){ muori(); return; }
+
+  const tx0 = Math.floor(p.x / T), tx1 = Math.floor((p.x + p.w) / T);
+  const ty0 = Math.floor(p.y / T), ty1 = Math.floor((p.y + p.h) / T);
+  for (let ty = ty0; ty <= ty1; ty++){
+    for (let tx = tx0; tx <= tx1; tx++){
+      if (ty < 0 || ty >= RIGHE || tx < 0 || tx >= liv.W) continue;
+      const c = liv.g[ty][tx];
+      if (c === "S" && tocca(p, { x: tx * T + 6, y: ty * T + 14, w: 20, h: 18 })){ muori(); return; }
+      if (c === "F" && tocca(p, { x: tx * T + 6, y: (ty - 1) * T, w: 20, h: 2 * T })){ prossimo(); return; }
+    }
+  }
+  for (const c of liv.cuori){
+    if (!c.preso && tocca(p, { x: c.x + 4, y: c.y + 4, w: 24, h: 24 })){
+      c.preso = true;
+      presi++;
+    }
+  }
+  if (liv.arrivo && tocca(p, liv.arrivo)){ prossimo(); return; }
+
+  for (const n of liv.nemici){
+    if (n.morto > 0){ n.morto--; continue; }
+    if (!n.vivo) continue;
+    n.x += n.vx;
+    if (n.x < n.min){ n.x = n.min; n.vx = Math.abs(n.vx); }
+    if (n.x + n.w > n.max){ n.x = n.max - n.w; n.vx = -Math.abs(n.vx); }
+    if (tocca(p, { x: n.x + 2, y: n.y + 2, w: n.w - 4, h: n.h - 2 })){
+      if (p.vy > 0 && (p.y + p.h) - n.y < 18){          // saltata sulla testa: camilla schiacciato
+        n.vivo = false; n.morto = 18;
+        p.vy = -8; p.aTerra = false; p.coyote = 0;
+        schiacciati++; bonus += BONUS_camilla;
+        elPen.textContent = "-" + BONUS_camilla + " s";
+        penMsg = 70;
+      } else {
+        muori();
+        return;
+      }
+    }
+  }
+  camX = Math.max(0, Math.min(liv.W * T - LARG, p.x + p.w / 2 - LARG / 2));
+}
+
+function prossimo(){
+  if (livello < LIVELLI.length - 1){
+    carica(livello + 1);
+    banner = 90;
+    bannerTesto = "Livello " + (livello + 1);
+  } else {
+    finisci();
+  }
+}
+
+/* ---------- Disegno ---------- */
+function rr(x, y, w, h, r){
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
+  ctx.fill();
+}
+function etichetta(c, testo, cx, y){
+  ctx.font = "700 12px Figtree, system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const w = ctx.measureText(testo).width + 14;
+  ctx.fillStyle = c.pannello;
+  rr(Math.floor(cx - w / 2), y - 9, w, 18, 9);
+  ctx.fillStyle = c.testo;
+  ctx.fillText(testo, cx, y);
+}
+function disegna(){
+  const c = scuro.matches ? SCURA : CHIARA;
+  const g = ctx.createLinearGradient(0, 0, 0, ALT);
+  g.addColorStop(0, c.cielo1);
+  g.addColorStop(1, c.cielo2);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, LARG, ALT);
+  if (!liv) return;
+
+  const da = Math.max(0, Math.floor(camX / T)), a = Math.min(liv.W - 1, Math.floor((camX + LARG) / T));
+  for (let ty = 0; ty < RIGHE; ty++){
+    for (let tx = da; tx <= a; tx++){
+      const ch = liv.g[ty][tx];
+      const x = Math.floor(tx * T - camX), y = ty * T;
+      if (ch === "#"){
+        ctx.fillStyle = c.blocco;
+        ctx.fillRect(x, y, T, T);
+        if (ty === 0 || liv.g[ty - 1][tx] !== "#"){
+          ctx.fillStyle = c.erba;
+          ctx.fillRect(x, y, T, 6);
+        }
+      } else if (ch === "S"){
+        ctx.fillStyle = c.spine;
+        ctx.beginPath();
+        ctx.moveTo(x + 2, y + T);
+        ctx.lineTo(x + T / 2, y + 10);
+        ctx.lineTo(x + T - 2, y + T);
+        ctx.closePath();
+        ctx.fill();
+      } else if (ch === "F"){
+        ctx.fillStyle = c.asta;
+        ctx.fillRect(x + 14, y - T, 4, 2 * T);
+        ctx.fillStyle = c.erba;
+        ctx.beginPath();
+        ctx.moveTo(x + 18, y - T + 2);
+        ctx.lineTo(x + 42, y - T + 14);
+        ctx.lineTo(x + 18, y - T + 26);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+  }
+
+  ctx.font = "26px 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const ora = Date.now() / 300;
+  for (const h of liv.cuori){
+    if (h.preso) continue;
+    ctx.fillText(CUORE, Math.floor(h.x + T / 2 - camX), h.y + T / 2 + Math.sin(ora + h.x) * 2);
+  }
+
+  for (const n of liv.nemici){
+    if (!n.vivo && n.morto <= 0) continue;
+    const x = Math.floor(n.x - camX), y = Math.floor(n.y);
+    ctx.fillStyle = c.camilla;
+    if (!n.vivo){ ctx.fillRect(x, y + n.h - 7, n.w, 7); continue; }   // schiacciato
+    rr(x, y, n.w, n.h, 8);
+    const d = n.vx > 0 ? 1.5 : -1.5;
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath(); ctx.arc(x + 8, y + 10, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + 18, y + 10, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#1a1a1a";
+    ctx.beginPath(); ctx.arc(x + 8 + d, y + 10, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x + 18 + d, y + 10, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = "#1a1a1a"; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + 4, y + 4); ctx.lineTo(x + 11, y + 7);
+    ctx.moveTo(x + 22, y + 4); ctx.lineTo(x + 15, y + 7);
+    ctx.stroke();
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath(); ctx.moveTo(x + 7, y + 17); ctx.lineTo(x + 11, y + 17); ctx.lineTo(x + 9, y + 23); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x + 15, y + 17); ctx.lineTo(x + 19, y + 17); ctx.lineTo(x + 17, y + 23); ctx.closePath(); ctx.fill();
+  }
+
+  if (liv.arrivo){
+    const a = liv.arrivo;
+    const ax = Math.floor(a.x - camX), ay = Math.floor(a.y + Math.sin(Date.now() / 250) * 1.5);
+    ctx.strokeStyle = c.persona; ctx.lineWidth = 4; ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(ax + a.w, ay + 14);
+    ctx.lineTo(ax + a.w + 8, ay + 4 + Math.sin(Date.now() / 120) * 4);
+    ctx.stroke();
+    ctx.fillStyle = c.persona;
+    rr(ax, ay, a.w, a.h, 6);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(ax + 5, ay + 7, 4, 5);
+    ctx.fillRect(ax + 13, ay + 7, 4, 5);
+    ctx.fillStyle = "#1a1a1a";
+    ctx.fillRect(ax + 6, ay + 9, 2, 3);
+    ctx.fillRect(ax + 14, ay + 9, 2, 3);
+    ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(ax + 11, ay + 15, 5, 0.2, Math.PI - 0.2); ctx.stroke();
+    etichetta(c, NOME_ARRIVO, ax + a.w / 2, ay - 12);
+  }
+
+  if (p){
+    const px = Math.floor(p.x - camX), py = Math.floor(p.y);
+    ctx.fillStyle = c.player;
+    rr(px, py, p.w, p.h, 6);
+    ctx.fillStyle = c.occhi;
+    const ox = p.dir > 0 ? 12 : 4;
+    ctx.fillRect(px + ox, py + 7, 3, 4);
+    ctx.fillRect(px + ox + 5, py + 7, 3, 4);
+    etichetta(c, NOME_GIOCATRICE, px + p.w / 2, py - 13);
+  }
+
+  if (stato === "fine" && liv.arrivo){
+    ctx.font = "26px 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(CUORE, Math.floor(liv.arrivo.x - camX - 14), liv.arrivo.y - 42 + Math.sin(Date.now() / 200) * 3);
+  }
+
+  let msg = "";
+  if (stato === "pronto") msg = "Premi Via!";
+  else if (stato === "fine") msg = NOME_GIOCATRICE + " ha raggiunto " + NOME_ARRIVO + " come 4 anni fa!";
+  else if (banner > 0) msg = bannerTesto;
+  if (msg){
+    ctx.font = "700 24px Figtree, system-ui, sans-serif";
+    const w = ctx.measureText(msg).width + 40;
+    ctx.fillStyle = c.pannello;
+    ctx.fillRect((LARG - w) / 2, ALT / 2 - 30, w, 60);
+    ctx.fillStyle = c.testo;
+    ctx.fillText(msg, LARG / 2, ALT / 2);
+  }
+
+  elCuori.textContent = presi + "/" + TOT_CUORI;
+  elcamilla.textContent = schiacciati + "/" + TOT_camilla;
+  elTempo.textContent = sec(Math.max(0, tempoGioco + penalita - bonus));
+}
+
+/* ---------- Avvio e fine ---------- */
+function avvia(){
+  tempoGioco = 0; penalita = 0; presi = 0; bonus = 0; schiacciati = 0; banner = 0; penMsg = 0;
+  elPen.textContent = "";
+  input.sx = input.dx = input.salto = false;
+  elFinale.hidden = true;
+  btnVia.hidden = true;
+  carica(0);
+  stato = "gioco";
+}
+
+function finisci(){
+  stato = "fine";
+  const mancati = TOT_CUORI - presi;
+  const penCuori = mancati * PENALITA_CUORE;
+  const totale = Math.max(0, Math.round((tempoGioco + penalita + penCuori - bonus) * 10) / 10);
+
+  const vinto = totale < SFIDA.secondi;
+  const prec = leggiRecord();
+  const nuovoRecord = typeof prec !== "number" || totale < prec;
+  if (nuovoRecord) salvaRecord(totale);
+
+  const esito = vinto ? FINALE.vittoria : FINALE.sconfitta;
+  document.getElementById("finaleTitolo").textContent = esito.titolo;
+  document.getElementById("finaleTesto").textContent = esito.testo;
+
+  let r = "Il tuo tempo finale: " + sec(totale) + ". Da battere: " + sec(SFIDA.secondi) + ".";
+  if (nuovoRecord && typeof prec === "number") r += " È il tuo nuovo record personale.";
+  document.getElementById("finaleEsito").textContent = r;
+  document.getElementById("finaleDettaglio").textContent =
+    "Corsa " + sec(tempoGioco) + ", cadute e camilla toccati +" + sec(penalita) + ", cuori mancati +" + sec(penCuori) +
+    " (" + presi + " su " + TOT_CUORI + " raccolti), camilla schiacciati −" + sec(bonus) +
+    " (" + schiacciati + " su " + TOT_camilla + ").";
+  document.getElementById("finalePosta").textContent = SFIDA.posta ? "In palio: " + SFIDA.posta : "";
+
+  mostraSfida();
+  elFinale.hidden = false;
+  btnVia.textContent = "Gioca ancora";
+  btnVia.hidden = false;
+}
+
+/* ---------- Comandi ---------- */
+function premiSalto(){
+  if (!input.salto && p) p.buffer = 6;
+  input.salto = true;
+}
+const TASTI = {
+  ArrowLeft: "sx", KeyA: "sx", ArrowRight: "dx", KeyD: "dx",
+  ArrowUp: "salto", KeyW: "salto", Space: "salto"
+};
+window.addEventListener("keydown", e => {
+  const k = TASTI[e.code];
+  if (!k || stato !== "gioco") return;
+  e.preventDefault();
+  if (k === "salto") premiSalto(); else input[k] = true;
+});
+window.addEventListener("keyup", e => {
+  const k = TASTI[e.code];
+  if (!k) return;
+  input[k] = false;
+});
+window.addEventListener("blur", () => { input.sx = input.dx = input.salto = false; });
+
+function lega(id, giu, su){
+  const b = document.getElementById(id);
+  b.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    try { b.setPointerCapture(e.pointerId); } catch (err) {}
+    b.classList.add("on");
+    giu();
+  });
+  ["pointerup", "pointercancel"].forEach(ev => b.addEventListener(ev, () => {
+    b.classList.remove("on");
+    su();
+  }));
+  b.addEventListener("contextmenu", e => e.preventDefault());
+}
+lega("bSx", () => { input.sx = true; }, () => { input.sx = false; });
+lega("bDx", () => { input.dx = true; }, () => { input.dx = false; });
+lega("bSalto", premiSalto, () => { input.salto = false; });
+
+btnVia.addEventListener("click", avvia);
+
+/* ---------- Ciclo di gioco (60 aggiornamenti al secondo) ---------- */
+const PASSO = 1000 / 60;
+let ultimo = 0, acc = 0;
+function ciclo(ts){
+  if (!ultimo) ultimo = ts;
+  acc += Math.min(ts - ultimo, 100);
+  ultimo = ts;
+  while (acc >= PASSO){
+    if (stato === "gioco") aggiorna();
+    acc -= PASSO;
+  }
+  disegna();
+  requestAnimationFrame(ciclo);
+}
+
+carica(0);
+mostraSfida();
+elCuori.textContent = "0/" + TOT_CUORI;
+elcamilla.textContent = "0/" + TOT_camilla;
+requestAnimationFrame(ciclo);
+</script>
+</body>
+</html>
